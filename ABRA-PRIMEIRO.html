@@ -1,0 +1,123 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Clube FM — hospedagem</title><style>body{max-width:1000px;margin:40px auto;padding:0 24px;font:16px/1.6 system-ui;color:#102448;background:#f8fafc}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:28px;border-top:6px solid #ffdd24;border-radius:12px;font:inherit}</style><pre># Clube FM Londrina 95.7 — entrega ao provedor
+
+Preparado em 25/09/2026. Versão de origem: 48b2f90073f8eae1fa59ce6e9cb345378fc498e4.
+
+## O que entregar
+
+Envie este ZIP inteiro ao responsável técnico. Ele contém o código-fonte, imagens, logomarcas, fontes, estilos, dados iniciais, servidor adaptado para Node.js, compilação pronta e instruções. O link da demonstração serve para comparação visual, não substitui os arquivos nem o servidor:
+https://clube-fm-londrina.moises479032.chatgpt.site
+
+Esta entrega não altera o site publicado, o DNS, o e-mail nem o provedor atual da rádio. O domínio final deve ser confirmado: foram mencionados tanto clubefmlondrina.com.br quanto radioclubefmlondrina.com.br. O exemplo usa https://www.clubefmlondrina.com.br.
+
+## Escolher o caminho
+
+| Ambiente do provedor | Caminho | Situação desta entrega |
+| --- | --- | --- |
+| Hospedagem com aplicação Node.js | Compilar e iniciar server.mjs; HTTPS pelo provedor | Adaptador incluído e testado localmente |
+| VPS/servidor Linux | Node.js + gerenciador de processos + Nginx/Apache | Exemplos systemd e proxy incluídos; ajustar ao servidor |
+| Servidor/plataforma com Docker | Construir imagem e executar com variáveis | Dockerfile incluído; não executado neste ambiente |
+| Cloudflare Workers | Compilar e publicar o Worker | Configuração incluída; nova conta/domínio não publicados |
+| cPanel/Plesk com Node.js habilitado | Usar gerenciador de aplicações | Depende da versão, módulo e regras do provedor; precisa homologação |
+| Hospedagem somente PHP/arquivos/FTP | Frontend estático + backend separado, ou portar APIs para PHP | Não funciona integralmente apenas extraindo o ZIP em public_html; adaptação não incluída |
+
+Recomendação: se o provedor suporta Node.js, usar esse caminho para manter tudo sob o domínio da rádio. Não há dependências npm de execução nem banco local obrigatório. Node.js 24 é a base sugerida e foi a versão usada nos testes (24.19.0); o pacote declara mínimo 22.
+
+## Arquivos e pastas
+
+- `public/`: páginas, imagens e scripts do navegador. Inclui a landing page Samaritano.
+- `worker/`: lógica original de clima, dólar, futebol e entrega de arquivos.
+- `scripts/build.mjs`: gera `dist/server/index.js`, incluindo os arquivos públicos.
+- `server.mjs`: adaptador HTTP Node.js.
+- `app.cjs`: ponte opcional para painéis que exigem entrada CommonJS.
+- `dist/server/index.js`: compilação pronta com domínio de exemplo; recompilar ao alterar conteúdo ou domínio.
+- `.env.example`: nomes de variáveis, sem chave secreta.
+- `deploy/`: exemplos de serviço e proxy; não aplicar sem ajustar usuário, caminhos e HTTPS.
+- `Dockerfile` e `wrangler.json`: caminhos alternativos de publicação.
+- `INTEGRACOES.md`: dependências, dados e manutenção.
+- `VALIDACAO.md`: testes executados e testes pendentes no provedor.
+- `CHECKLIST-PROVEDOR.md`: informações e roteiro de entrada em produção.
+- `SHA256SUMS.txt`: integridade de todos os demais arquivos do pacote.
+
+O ZIP não contém acesso administrativo, credenciais privadas, histórico Git ou backup do banco remoto. A chave Supabase presente em content.js é publicável e já utilizada pelo navegador; não é uma chave de administrador.
+
+## Caminho 1 — Node.js no provedor
+
+1. Extrair em uma pasta de aplicação fora do diretório de arquivos públicos, por exemplo `/opt/clube-fm`.
+2. Instalar Node.js 24 e conferir `node --version`.
+3. Copiar `.env.example` para `.env`. Ajustar `SITE_ORIGIN` ao domínio final, sem barra final. Preencher a chave de futebol somente se houver conta com cobertura contratada.
+4. Na pasta do projeto, executar:
+
+```sh
+node --env-file=.env scripts/build.mjs
+node --env-file=.env server.mjs
+```
+
+5. Testar `http://127.0.0.1:3000/`. As variáveis padrão escutam apenas localmente. Se o painel exigir todas as interfaces, definir `HOST=0.0.0.0` e proteger a porta conforme o provedor.
+6. Configurar o proxy HTTPS do domínio para a aplicação. Exemplo: `deploy/nginx.conf.example`. Certificado e redirecionamento HTTP → HTTPS ficam no proxy.
+7. Configurar reinício automático com o gerenciador do provedor ou adaptar `deploy/clube-fm.service.example`. Criar o usuário `clube`, corrigir o caminho de Node e proteger o arquivo `.env` para leitura apenas por administradores e pelo usuário da aplicação.
+
+Em painéis, definir as variáveis no próprio painel e usar `npm run build` e `npm start`. O comando `npm start` não carrega `.env` sozinho: usar as variáveis do painel ou o comando explícito acima. O domínio é aplicado durante o build; recompilar após mudança. A chave de futebol é lida na execução; reiniciar após alteração.
+
+### cPanel/Plesk
+
+Confirmar com o provedor a disponibilidade de Node.js 22 ou superior, variáveis de ambiente, terminal/build e aplicação persistente. Registrar a raiz da aplicação fora de `public_html`. Usar `server.mjs` como entrada quando suportado; se o gerenciador exigir CommonJS, testar `app.cjs`. Passenger pode administrar a porta; seguir as configurações do provedor. Os exemplos não foram homologados em Passenger/Plesk. Não selecionar apenas `public/` como site estático se a intenção for manter as três APIs.
+
+## Caminho 2 — Docker
+
+Na raiz do pacote:
+
+```sh
+docker build --build-arg SITE_ORIGIN=https://www.clubefmlondrina.com.br -t clube-fm:2026-09-25 .
+docker run -d --name clube-fm --restart unless-stopped --env-file .env -e HOST=0.0.0.0 -e PORT=3000 -p 127.0.0.1:3000:3000 clube-fm:2026-09-25
+```
+
+Configurar HTTPS no proxy da máquina. O `.env` é excluído da imagem; não passar segredos no build. O comando acima deve ser ajustado se a plataforma usar roteamento e portas próprios. A imagem inclui a aplicação completa e não necessita volume de dados local. Manter logs e atualizar a imagem de Node conforme a rotina do provedor.
+
+## Caminho 3 — Cloudflare Workers
+
+Mantém o modelo de execução original. Exige uma conta Cloudflare e configuração do domínio pelo responsável técnico.
+
+```sh
+npm run build
+npx wrangler login
+npx wrangler secret put FOOTBALL_API_KEY
+npx wrangler deploy
+```
+
+O passo da chave é opcional; sem ela o futebol utiliza consulta pontual identificada. Usar uma versão de Wrangler suportada pelo ambiente, registrar a versão usada e testar inicialmente no endereço workers.dev. O arquivo `wrangler.json` já define entrada, data de compatibilidade e comando de build. Para outro domínio, fornecer `SITE_ORIGIN` no ambiente do build. `FOOTBALL_SEASON`, quando necessária, pode ser configurada como variável do Worker; a chave permanece em Secrets.
+
+Após homologação, associar o domínio próprio em Workers → Settings → Domains &amp; Routes, seguindo a documentação e os requisitos DNS da conta. Verificar os limites de script/CPU/requisições do plano para o bundle com imagens incorporadas. Nenhum plano, conta ou domínio Cloudflare foi contratado/configurado nesta entrega.
+
+## Caminho 4 — hospedagem somente PHP/FTP
+
+A pasta `public/` contém a interface, mas o navegador chama `/api/weather`, `/api/dollar` e `/api/football`. Sem backend essas rotas não existem.
+
+Há duas alternativas que exigem trabalho do provedor:
+
+1. Hospedar o backend entregue em Node.js/Worker e configurar proxy dessas três rotas no domínio principal. Se optar por chamadas entre domínios, adaptar as URLs do frontend e a política CORS do backend; não basta trocar o endereço do site.
+2. Reimplementar as três APIs em PHP mantendo os mesmos contratos JSON, cache, tratamento de falhas e proteção da chave do futebol, e testar a integração.
+
+O ZIP não inclui backend PHP nem configuração de proxy entre provedores. Se nenhuma das alternativas estiver disponível, migrar para um plano com Node.js. Hospedagem WordPress também não transforma este projeto em tema/plugin automaticamente.
+
+## Entrada em produção e retorno
+
+1. Obter backup do site antigo e de seu banco com o provedor, além da configuração DNS atual.
+2. Publicar primeiro em subdomínio temporário, com HTTPS; configurar SITE_ORIGIN e recompilar.
+3. Executar a homologação do checklist, incluindo conteúdos remotos e reprodução no celular.
+4. Definir domínio principal e redirecionamento entre www/sem www e eventual domínio alternativo.
+5. Trocar somente os registros web necessários. Preservar MX, SPF, DKIM, DMARC e serviços de e-mail. Se trocar nameservers, copiar e conferir toda a zona previamente.
+6. Manter a hospedagem anterior durante a transição DNS, monitorar logs e testar novamente.
+7. Se houver falha, reverter o apontamento web/proxy à configuração anterior e restaurar a versão anterior. A propagação DNS pode atrasar o retorno em alguns acessos.
+
+As seções usam âncoras como `/#futebol` e `/#anunciantes`; não são diretórios independentes. A landing Samaritano é `/samaritano.html`. Instalar na raiz do domínio; instalação em subpasta exige adaptação das URLs `/api/`.
+
+## Referências técnicas oficiais
+
+Consultadas em 25/09/2026:
+- Node.js, variáveis de ambiente: https://nodejs.org/api/environment_variables.html
+- Node.js 22, opção --env-file: https://nodejs.org/download/release/v22.18.0/docs/api/cli.html
+- Cloudflare Wrangler: https://developers.cloudflare.com/workers/wrangler/configuration/
+- Domínios Workers: https://developers.cloudflare.com/workers/configuration/routing/custom-domains/
+- cPanel Application Manager: https://docs.cpanel.net/cpanel/software/application-manager/
+- cPanel Node.js: https://docs.cpanel.net/knowledge-base/web-services/how-to-install-a-node.js-application/
+</pre></html>
